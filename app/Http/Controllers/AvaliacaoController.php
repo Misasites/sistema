@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Avaliacao;
@@ -23,7 +24,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 
-
 class AvaliacaoController extends Controller
 {
     /**
@@ -39,7 +39,7 @@ class AvaliacaoController extends Controller
             $avaliacoes = Avaliacao::with([
                 'grupoEtnico', 'orientacaoSexual', 'sessoesMassoterapiaAnteriormente',
                 'nivelEstresse', 'condicaoMedicaDiagnosticada', 'corPele', 'medicacaoControlada',
-                'objetivoSessoesMassoterapia', 'problemaSaudeFisica', 'problemaSaudeEmocional',
+                'problemaSaudeFisica', 'problemaSaudeEmocional',
                 'tratamentoEmocionalMental', 'tipoAlergia', 'tratamentoEmocionalMental',
                 'registroFotografico', 'restricaoFisica', 'obsAdicionalSaude'
             ])->paginate(20);
@@ -48,7 +48,7 @@ class AvaliacaoController extends Controller
             $avaliacoes = Avaliacao::with([
                 'grupoEtnico', 'orientacaoSexual', 'sessoesMassoterapiaAnteriormente',
                 'nivelEstresse', 'condicaoMedicaDiagnosticada', 'corPele', 'medicacaoControlada',
-                'objetivoSessoesMassoterapia', 'problemaSaudeFisica', 'problemaSaudeEmocional',
+                'problemaSaudeFisica', 'problemaSaudeEmocional',
                 'tratamentoEmocionalMental', 'tipoAlergia', 'tratamentoEmocionalMental',
                 'registroFotografico', 'restricaoFisica', 'obsAdicionalSaude'
             ])->where('user_id', $user->id) // Filtra pelas avaliações do usuário logado
@@ -112,8 +112,6 @@ class AvaliacaoController extends Controller
     }
 
 
-
-
     /* Mostrar o formulário de criação de uma nova avaliação.*/
     public function create()
     {
@@ -121,7 +119,7 @@ class AvaliacaoController extends Controller
         $condicao_medica_diagnosticada = CondicaoMedicaDiagnosticada::all();
         $problema_saude_fisica = ProblemaSaudeFisico::all();
         $problema_saude_emocional = ProblemaSaudeEmocional::all();
-        $doenca= Doenca::all();
+        $doenca = Doenca::all();
         $tratamento_emocional_mental = TratamentoEmocionalMental::all();
         $restricao_fisica = RestricaoFisica::all();
         $tipo_alergia = TipoAlergia::all();
@@ -133,7 +131,6 @@ class AvaliacaoController extends Controller
         $objetivo_sessoes_massoterapia = ObjetivoSessoesMassoterapia::all();
         $medicacao_controlada = MedicacaoControlada::all();
         $registro_fotografico = RegistroFotografico::all();
-
 
 
         return view('avaliacoes.create', compact('grupo_etnicos', 'orientacao_sexual',
@@ -148,7 +145,6 @@ class AvaliacaoController extends Controller
     }
 
 
-
     /** Armazenar uma nova avaliação no banco de dados.*/
     public function store(Request $request)
     {
@@ -160,7 +156,6 @@ class AvaliacaoController extends Controller
             'qual_problema_saude_fisica' => 'nullable|string|max:255',
             'problema_saude_emocional' => 'nullable|integer',
             'qual_problema_saude_emocional' => 'nullable|string|max:255',
-            'doenca' => 'nullable|string|max:255',
             'tratamento_emocional_mental' => 'nullable|integer',
             'qual_tratamento_emocional_mental' => 'nullable|string|max:255',
             'medicacao_controlada' => 'nullable|integer',
@@ -169,7 +164,7 @@ class AvaliacaoController extends Controller
             'tipo_alergia' => 'nullable|integer',
             'qual_tipo_alergia' => 'nullable|string|max:255',
             'nivel_estresse' => 'nullable|integer',
-            'objetivo_sessoes_massoterapia' => 'nullable|integer',
+
             'qual_objetivo_sessoes_massoterapia' => 'nullable|string|max:255',
             'orientacao_sexual' => 'nullable|integer',
             'grupo_etnico' => 'nullable|integer',
@@ -177,14 +172,30 @@ class AvaliacaoController extends Controller
             'cor_pele' => 'nullable|integer',
             'registro_fotografico' => 'nullable|integer',
             'obs_adicional_saude' => 'nullable|string',
+            'lista_doenca' => 'nullable|array', // Deve ser um array
+            'lista_doenca.*' => 'integer|exists:doenca,id', // Cada valor deve ser um ID válido
+            'objetivo_sessoes_massoterapia' => 'nullable|array',
+            'objetivo_sessoes_massoterapia.*'=> 'integer|exists:objetivo_sessoes_massoterapia,id',
+
+//            'lista_objetivo'  => 'nullable|array', // Deve ser um array
+//            'lista_objetivo.*' => 'integer|exists:objetivo_sessoes_massoterapia,id', // Cada valor deve ser um ID válido
         ]);
 
-        // Adiciona o ID do usuário logado
+// Adiciona o ID do usuário logado
         $validated['user_id'] = Auth::id();
 
+// Converte a lista de doenças para JSON antes de salvar
+        $validated['lista_doenca'] = json_encode($request->lista_doenca ?? []);
+
+        // Converte a lista de objetivos sessoes massoterapia para JSON antes de salvar
+        $validated['objetivo_sessoes_massoterapia'] = json_encode($request->objetivo_sessoes_massoterapia ?? []);
+
+// Cria a avaliação
         Avaliacao::create($validated);
 
         return redirect()->route('avaliacoes.index')->with('success', 'Avaliação criada com sucesso.');
+
+
     }
 
 
@@ -207,19 +218,31 @@ class AvaliacaoController extends Controller
             'condicaoMedicaDiagnosticada',
             'corPele',
             'medicacaoControlada',
-            'objetivoSessoesMassoterapia',
             'problemaSaudeFisica',
             'problemaSaudeEmocional',
             'tratamentoEmocionalMental',
             'tipoAlergia',
-            'tratamentoEmocionalMental',
             'registroFotografico',
             'restricaoFisica',
-            'registroFotografico',
-            'obsAdicionalSaude' ])->findOrFail($id);
+            'obsAdicionalSaude'
+        ])->findOrFail($id);
 
-        return view('avaliacoes.show', compact('avaliacao'));
+        // Decodifica a lista de doenças (vem como JSON no banco)
+        $doencasRelacionadas = collect(json_decode($avaliacao->lista_doenca, true) ?? [])->pluck('id')->toArray();
+        $doencas = Doenca::whereIn('id', $doencasRelacionadas)->get();
+
+        // Decodifica os objetivos das sessões de massoterapia
+        $objetivosRelacionados = json_decode($avaliacao->objetivo_sessoes_massoterapia, true) ?? [];
+
+        // Busca os objetivos pelo ID
+        $objetivos = ObjetivoSessoesMassoterapia::whereIn('id', $objetivosRelacionados)->get();
+
+
+        return view('avaliacoes.show', compact('avaliacao', 'doencas', 'objetivos', 'objetivosRelacionados'));
     }
+
+
+
 
 
     /** Mostrar o formulário de edição de uma avaliação existente */
@@ -234,7 +257,7 @@ class AvaliacaoController extends Controller
         $sessoes_massoterapia_anteriormente = SessoesMassoterapiaAnteriormente::all();
         $nivel_estresse = NivelEstresse::all();
         $cor_pele = CorPele::all();
-        $problema_saude_emocional  = ProblemaSaudeEmocional::all();
+        $problema_saude_emocional = ProblemaSaudeEmocional::all();
         $objetivo_sessoes_massoterapia = ObjetivoSessoesMassoterapia::all();
         $medicacao_controlada = MedicacaoControlada::all();
         $condicao_medica_diagnosticada = CondicaoMedicaDiagnosticada::all();
@@ -251,12 +274,10 @@ class AvaliacaoController extends Controller
             'avaliacao', 'grupo_etnico', 'orientacao_sexual', 'sessoes_massoterapia_anteriormente',
             'nivel_estresse', 'cor_pele', 'objetivo_sessoes_massoterapia', 'medicacao_controlada',
             'condicao_medica_diagnosticada', 'problema_saude_fisica', 'obs_adicional_saude',
-            'registro_fotografico', 'tratamento_emocional_mental', 'tipo_alergia',  'restricao_fisica',
+            'registro_fotografico', 'tratamento_emocional_mental', 'tipo_alergia', 'restricao_fisica',
             'doenca', 'problema_saude_emocional',
         ));
     }
-
-
 
 
     /** Atualizar uma avaliação no banco de dados.*/
@@ -285,16 +306,15 @@ class AvaliacaoController extends Controller
                 'tipo_alergia' => 'nullable|integer',
                 'qual_tipo_alergia' => 'nullable|string|max:255',
                 'orientacao_sexual' => 'nullable|integer',
-                'grupo_etnico'  => 'nullable|integer',
+                'grupo_etnico' => 'nullable|integer',
                 'cor_pele' => 'nullable|integer',
                 'qual_grupo_etnico' => 'nullable|string|max:255',
-                'registro_fotografico'  => 'nullable|integer',
+                'registro_fotografico' => 'nullable|integer',
                 'obs_adicional_saude' => 'nullable|string',
             ]);
 
             $avaliacao = Avaliacao::findOrFail($id);
             $avaliacao->update($validated);
-
 
 
             return redirect()->route('avaliacoes.index')->with('success', 'Avaliação atualizada com sucesso.');
@@ -304,10 +324,6 @@ class AvaliacaoController extends Controller
             return redirect()->route('avaliacoes.index')->with('error', 'Erro ao atualizar avaliação: ' . $e->getMessage());
         }
     }
-
-
-
-
 
 
     /** Remover uma avaliação do banco de dados.*/
@@ -323,7 +339,6 @@ class AvaliacaoController extends Controller
             $avaliacao->delete();
 
 
-
             return redirect()->route('avaliacoes.index')->with('success', 'Avaliação excluída com sucesso.');
         } catch (ModelNotFoundException $e) {
             // Caso o modelo não seja encontrado
@@ -333,8 +348,6 @@ class AvaliacaoController extends Controller
             return redirect()->route('avaliacoes.index')->with('error', 'Erro ao excluir avaliação: ' . $e->getMessage());
         }
     }
-
-
 
 
 }
